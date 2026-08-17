@@ -1,0 +1,41 @@
+#下面的前面二步都不需要做，正式是从“用水溶性模型正式预测”开始。 #训练水溶性预测模型#用示例模型测试（可选，验证流程）不要做。
+cd ~/chemprop/chemprop-main/tests/data
+wget https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/delaney-processed.csv
+
+#训练水溶性预测模型
+(chemprop) li@li-ThinkStation-P3-Tower-Gen-2:~/chemprop/chemprop-main/tests/data$ chemprop train     -i delaney-processed.csv     --smiles-columns smiles     --target-columns "measured log solubility in mols per litre"     --save-dir solubility_model     --epochs 50
+
+#用示例模型测试（可选，验证流程）
+(chemprop) li@li-ThinkStation-P3-Tower-Gen-2:~/chemprop/chemprop-main/tests/data$ chemprop predict     -i peg_chentao_6samples.csv     --model-path example_model_v2_regression_mol.pt     -o 6sample_predictions_test.csv
+
+#从这里正式开始
+#用水溶性模型正式预测
+(chemprop) li@li-ThinkStation-P3-Tower-Gen-2:~/chemprop/chemprop-main/tests/data$ chemprop predict     -i peg_chentao_6samples.csv     --model-path solubility_model/model_0/best.pt     -o 6sample_predictions_final.csv
+
+
+#计算数值
+(chemprop) li@li-ThinkStation-P3-Tower-Gen-2:~/chemprop/chemprop-main/tests/data$ python solubility_calculator.py -i 6sample_predictions_final.csv --smiles-col smiles --logs-col "measured log solubility in mols per litre" -o  result.csv
+
+#输入文件peg_chentao_6samples.csv，输出文件1. training_data_CORRECT.csv      2. augmented_training_data_CORRECT.csv
+(chemprop) li@li-ThinkStation-P3-Tower-Gen-2:~/chemprop/chemprop-main/tests/data$ python prepare_training_data.py 
+
+#input：augmented_training_data_CORRECT.csv（训练数据），output：solubility_model/model_0/best.pt这是预训练的溶解度模型，作为迁移学习的起点
+(chemprop) li@li-ThinkStation-P3-Tower-Gen-2:~/chemprop/chemprop-main/tests/data$ chemprop train     --data-path augmented_training_data_CORRECT.csv     --task-type regression     --checkpoint solubility_model/model_0/best.pt     --save-dir taxol_model_finetuned     --epochs 100     --batch-size 10     --split-type random     --split-sizes 0.8 0.1 0.1     --data-seed 42     --pytorch-seed 42     --init-lr 0.00001     --max-lr 0.0001     --final-lr 0.00001
+
+(chemprop) li@li-ThinkStation-P3-Tower-Gen-2:~/chemprop/chemprop-main/tests/data$ chemprop predict     -i augmented_training_data_CORRECT.csv     --model-path taxol_model_finetuned/model_0/best.pt     -o predictions_training.csv
+
+#input two files  predictions_training.csv     augmented_training_data_CORRECT.csv output  detailed_analysis.csv
+(chemprop) li@li-ThinkStation-P3-Tower-Gen-2:~/chemprop/chemprop-main/tests/data$ python analyze_predictions.py 
+
+(chemprop) li@li-ThinkStation-P3-Tower-Gen-2:~/chemprop/chemprop-main/tests/data$ chemprop predict     -i peg_chentao_6samples.csv     --model-path taxol_model_finetuned/model_0/best.pt     -o peg_chentao_predictions.csv
+
+(chemprop) li@li-ThinkStation-P3-Tower-Gen-2:~/chemprop/chemprop-main/tests/data$ # 创建模型备份
+cp taxol_model_finetuned/model_0/best.pt taxol_solubility_model_final.pt
+
+(chemprop) li@li-ThinkStation-P3-Tower-Gen-2:~/chemprop/chemprop-main/tests/data$ python convert_solubility.py 
+
+
+
+
+
+
